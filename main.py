@@ -1,47 +1,42 @@
-import uuid
-from datetime import datetime, timezone
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from models import LeadRequest, LeadResponse, ErrorResponse
+from exceptions import AppError
+from models import ErrorResponse, FieldError
+from routes import router
 
-app = FastAPI(title="Lead Intelligence API", version="0.1.0")
-
-# Known disposable/throwaway email providers — reject these as leads.
-# Not exhaustive; extend as you find more.
-DISPOSABLE_DOMAINS = {
-    "mailinator.com",
-    "tempmail.com",
-    "guerrillamail.com",
-    "10minutemail.com",
-    "throwawaymail.com",
-}
+app = FastAPI(title="Lead Intelligence API", version="0.2.0")
+app.include_router(router)
 
 
-def is_disposable_email(email: str) -> bool:
-    domain = email.split("@")[-1].lower()
-    return domain in DISPOSABLE_DOMAINS
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    body = ErrorResponse(error_code=exc.error_code, message=exc.message)
+    return JSONResponse(status_code=exc.status_code, content=body.model_dump())
 
 
-@app.post("/lead", response_model=LeadResponse, status_code=201)
-def create_lead(lead: LeadRequest):
-    # --- business logic (runs only after Pydantic validation passes) ---
-    if is_disposable_email(lead.email):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "DISPOSABLE_EMAIL",
-                "message": "Disposable/throwaway email addresses are not accepted.",
-            },
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    details = [
+        FieldError(
+            field=".".join(str(part) for part in err["loc"] if part != "body"),
+            message=err["msg"],
         )
-
-    # --- create the lead ---
-    return LeadResponse(
-        lead_id=str(uuid.uuid4()),
-        name=lead.name,
-        email=lead.email,
-        company=lead.company,
-        message=lead.message,
-        received_at=datetime.now(timezone.utc),
+        for err in exc.errors()
+    ]
+    body = ErrorResponse(
+        error_code="VALIDATION_ERROR",
+        message="Request validation failed.",
+        details=details,
     )
+    return JSONResponse(status_code=422, content=body.model_dump())
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    body = ErrorResponse(
+        error_code="INTERNAL_ERROR",
+        message="Something went wrong on our side.",
+    )
+    return JSONResponse(status_code=500, content=body.model_dump())
