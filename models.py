@@ -15,6 +15,11 @@ class LeadResponse(BaseModel):
     message: str
     received_at: datetime
 
+class FieldError(BaseModel):
+    field: str
+    message: str
+
 class ErrorResponse(BaseModel):
     error_code: str
     message: str
+    details: list[FieldError] | None = None
