@@ -21,7 +21,5 @@ class LowEffortMessageError(AppError):
         super().__init__(
             status_code=400,
             error_code="LOW_EFFORT_MESSAGE",
-            message="Message must contain meaningful content, not repeated characters."
+            message="Message must contain meaningful content, not repeated characters.",
         )
-
-        
