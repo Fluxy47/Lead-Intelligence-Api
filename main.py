@@ -6,6 +6,17 @@ from exceptions import AppError
 from models import ErrorResponse, FieldError
 from routes import router
 
+import logging
+from config import LOG_LEVEL
+
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
+logger = logging.getLogger("lead_api")
+
 app = FastAPI(title="Lead Intelligence API", version="0.2.0")
 app.include_router(router)
 
@@ -35,6 +46,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     body = ErrorResponse(
         error_code="INTERNAL_ERROR",
         message="Something went wrong on our side.",

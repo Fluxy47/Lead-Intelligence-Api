@@ -6,6 +6,11 @@ from fastapi import APIRouter
 from exceptions import DisposableEmailError, LowEffortMessageError
 from models import ErrorResponse, LeadRequest, LeadResponse
 
+import logging
+
+
+logger = logging.getLogger("lead_api")
+
 router = APIRouter(tags=["leads"])
 
 DISPOSABLE_DOMAINS = {
@@ -39,13 +44,18 @@ def is_low_effort_message(message: str) -> bool:
 )
 def create_lead(lead: LeadRequest):
     if is_disposable_email(lead.email):
+        logger.warning("Rejected lead: disposable email (%s)", lead.email)
         raise DisposableEmailError()
 
     if is_low_effort_message(lead.message):
+        logger.warning("Rejected lead: low-effort message from %s", lead.email)
         raise LowEffortMessageError()
 
+    lead_id = str(uuid.uuid4())
+    logger.info("Lead created: %s (%s)", lead_id, lead.email)
+
     return LeadResponse(
-        lead_id=str(uuid.uuid4()),
+        lead_id=lead_id,
         name=lead.name,
         email=lead.email,
         company=lead.company,
